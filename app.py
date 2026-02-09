@@ -1,51 +1,43 @@
 import streamlit as st
-import pandas as pd
-from openai import OpenAI
+import hashlib
 
-client = OpenAI(api_key="YOUR_OPENAI_API_KEY")
+# ----------------- USER DATABASE -----------------
+# Store usernames and hashed passwords
+USER_DB = {
+    "alice": hashlib.sha256("alice123".encode()).hexdigest(),
+    "bob": hashlib.sha256("bob123".encode()).hexdigest()
+}
 
-st.title("Process Submission & Validation")
+# ----------------- LOGIN FUNCTION -----------------
+def login(username, password):
+    hashed_pw = hashlib.sha256(password.encode()).hexdigest()
+    if username in USER_DB and USER_DB[username] == hashed_pw:
+        return True
+    return False
 
-# Step 1: Upload process Excel
-uploaded_file = st.file_uploader("Upload Process Excel", type=["xlsx"])
-if uploaded_file:
-    df = pd.read_excel(uploaded_file)
-    st.write("Uploaded process:")
-    st.dataframe(df)
+# ----------------- APP START -----------------
+st.title("Internal Streamlit App Login")
 
-    if st.button("Validate Process"):
-        # Step 2: Send process to OpenAI for questions
-        process_text = df.to_dict(orient="records")
-        prompt = f"""
-        You are a process reviewer. Here is the employee-submitted process:
-        {process_text}
-        Ask questions for missing or unclear steps. Return JSON of questions.
-        """
-        response = client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        questions = response.choices[0].message.content
-        st.write("OpenAI Questions:")
-        st.json(questions)
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
-        # Step 3: Collect employee answers dynamically
-        answers = {}
-        for q in eval(questions):  # assuming questions is a JSON string
-            answers[q["step"]] = st.text_input(f"Step {q['step']} - {q['question']}")
+if not st.session_state.logged_in:
+    st.subheader("Login")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    login_button = st.button("Login")
 
-        if st.button("Submit Answers"):
-            # Step 4: Send answers back to OpenAI for final process
-            prompt_update = f"""
-            Update the following process based on employee answers:
-            Process: {process_text}
-            Answers: {answers}
-            Return updated process in JSON format.
-            """
-            response_final = client.chat.completions.create(
-                model="gpt-4.1-mini",
-                messages=[{"role": "user", "content": prompt_update}],
-            )
-            updated_process = response_final.choices[0].message.content
-            st.write("Updated Process:")
-            st.json(updated_process)
+    if login_button:
+        if login(username, password):
+            st.success(f"Welcome, {username}!")
+            st.session_state.logged_in = True
+        else:
+            st.error("Invalid username or password")
+else:
+    st.subheader("Dashboard")
+    st.write("You are logged in! Here you can upload processes, interact with OpenAI, etc.")
+    
+    logout_button = st.button("Logout")
+    if logout_button:
+        st.session_state.logged_in = False
+        st.experimental_rerun()
