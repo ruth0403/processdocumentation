@@ -9,7 +9,7 @@ LOG_FILE = "usage_log.csv"
 REGIONS = ["MEA", "KSA", "EU", "SEA"]
 
 # ---------------- USER DATABASE ----------------
-# username: hashed password + other info
+# username: hashed password + default info (position, region)
 USER_DB = {
     "alice": {
         "password": hashlib.sha256("alice123".encode()).hexdigest(),
@@ -46,17 +46,15 @@ def login(username, password):
         return True
     return False
 
+# ---------------- INITIALIZE SESSION STATE ----------------
+for key in ["logged_in","username","name","position","region"]:
+    if key not in st.session_state:
+        st.session_state[key] = "" if key != "logged_in" else False
+
 # ---------------- STREAMLIT APP ----------------
 st.title("Internal Authorization System")
 
-# Session state
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.username = ""
-    st.session_state.name = ""
-    st.session_state.position = ""
-    st.session_state.region = ""
-
+# ---------------- LOGIN SCREEN ----------------
 if not st.session_state.logged_in:
     st.subheader("User Authorization")
 
@@ -71,10 +69,10 @@ if not st.session_state.logged_in:
 
     # Validation
     if login_button:
-        # Check mandatory fields
         if not name or not position or not region or not username or not password:
             st.error("All fields are mandatory.")
         elif login(username, password):
+            # Save session state
             st.session_state.logged_in = True
             st.session_state.username = username
             st.session_state.name = name
@@ -87,10 +85,13 @@ if not st.session_state.logged_in:
         else:
             st.error("Invalid username or password.")
 
+# ---------------- DASHBOARD ----------------
 else:
-    # ---------------- DASHBOARD ----------------
     st.subheader("Dashboard")
-    st.write(f"Hello {st.session_state.name} ({st.session_state.position}) from {st.session_state.region}!")
+    st.write(
+        f"Hello {st.session_state.name} ({st.session_state.position}) "
+        f"from {st.session_state.region}!"
+    )
 
     st.write("You are logged in. Here you can upload processes, interact with OpenAI, etc.")
 
