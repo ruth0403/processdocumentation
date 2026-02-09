@@ -1,4 +1,4 @@
-streamlit==1.28.0                 # core Streamlit
-streamlit-authenticator==0.5.0    # for username/password login
-pandas==2.1.0                     # optional, for data handling
-gpt4all==1.0.0                     # optional, if using local GPT model
+streamlit==1.26.0
+streamlit-authenticator==0.11.1
+bcrypt==4.0.1
+PyYAML==6.0
