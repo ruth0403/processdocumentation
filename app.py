@@ -3,13 +3,19 @@ import hashlib
 import csv
 import os
 from datetime import datetime
+import pandas as pd
 
 # ---------------- CONFIG ----------------
 LOG_FILE = "usage_log.csv"
 REGIONS = ["MEA", "KSA", "EU", "SEA"]
 
+# ---------------- CREATE LOG FILE IF NOT EXISTS ----------------
+if not os.path.exists(LOG_FILE):
+    with open(LOG_FILE, mode="w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["timestamp","username","name","position","region","action"])
+
 # ---------------- USER DATABASE ----------------
-# username: hashed password + default info (position, region)
 USER_DB = {
     "alice": {
         "password": hashlib.sha256("alice123".encode()).hexdigest(),
@@ -25,11 +31,8 @@ USER_DB = {
 
 # ---------------- LOG FUNCTION ----------------
 def log_event(username, action, name="", position="", region=""):
-    file_exists = os.path.isfile(LOG_FILE)
     with open(LOG_FILE, mode="a", newline="") as f:
         writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(["timestamp","username","name","position","region","action"])
         writer.writerow([
             datetime.utcnow().isoformat(),
             username,
@@ -67,12 +70,10 @@ if not st.session_state.logged_in:
 
     login_button = st.button("Login")
 
-    # Validation
     if login_button:
         if not name or not position or not region or not username or not password:
             st.error("All fields are mandatory.")
         elif login(username, password):
-            # Save session state
             st.session_state.logged_in = True
             st.session_state.username = username
             st.session_state.name = name
@@ -81,7 +82,7 @@ if not st.session_state.logged_in:
 
             log_event(username, "LOGIN", name, position, region)
             st.success(f"Welcome {name} from {region}!")
-            st.experimental_rerun()
+            st.stop()  # Stop script here so dashboard shows correctly
         else:
             st.error("Invalid username or password.")
 
@@ -92,8 +93,6 @@ else:
         f"Hello {st.session_state.name} ({st.session_state.position}) "
         f"from {st.session_state.region}!"
     )
-
-    st.write("You are logged in. Here you can upload processes, interact with OpenAI, etc.")
 
     # Example action
     if st.button("Perform Sample Action"):
@@ -106,7 +105,22 @@ else:
         )
         st.success("Sample action logged!")
 
-    # Logout
+    # ---------------- LOG VIEWER ----------------
+    st.subheader("Usage Log")
+    if os.path.exists(LOG_FILE):
+        log_df = pd.read_csv(LOG_FILE)
+        st.dataframe(log_df)
+        # Download button
+        st.download_button(
+            label="Download Log CSV",
+            data=open(LOG_FILE,"rb"),
+            file_name="usage_log.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("No logs available yet.")
+
+    # ---------------- LOGOUT ----------------
     if st.button("Logout"):
         log_event(
             st.session_state.username,
@@ -116,4 +130,4 @@ else:
             st.session_state.region
         )
         st.session_state.logged_in = False
-        st.experimental_rerun()
+        st.stop()
