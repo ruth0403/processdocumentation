@@ -1,37 +1,50 @@
 import streamlit as st
 import streamlit_authenticator as stauth
+import yaml
 
-# ---- Step 1: Define users ----
-names = ["Alice", "Bob"]
-usernames = ["alice", "bob"]
-passwords = ["password123", "securepass456"]  # optional: hash passwords for more security
+# -------------------------
+# Step 1: Define users
+# -------------------------
+# For demonstration, passwords are hashed. DO NOT store plain text passwords in production.
 
-# ---- Step 2: Initialize authenticator ----
+users = {
+    "usernames": {
+        "ruthu": {
+            "name": "Ruthu",
+            "password": stauth.Hasher(["mypassword123"]).generate()[0]
+        },
+        "admin": {
+            "name": "Admin",
+            "password": stauth.Hasher(["adminpass"]).generate()[0]
+        }
+    }
+}
+
+# -------------------------
+# Step 2: Initialize authenticator
+# -------------------------
 authenticator = stauth.Authenticate(
-    names,
-    usernames,
-    passwords,
-    "cookie_name",        # cookie name for session
-    "signature_key",      # secret key
+    users["usernames"],
+    "streamlit_app_cookie",  # cookie name
+    "random_signature_key",  # key for encryption
     cookie_expiry_days=1
 )
 
-# ---- Step 3: Login UI ----
-name, auth_status, username = authenticator.login("Login", "main")
+# -------------------------
+# Step 3: Login widget
+# -------------------------
+name, authentication_status, username = authenticator.login("Login", "main")
 
-# ---- Step 4: Handle authentication ----
-if auth_status:
+if authentication_status:
     st.success(f"Welcome {name}!")
     
-    # Example protected content
-    st.write("This is internal content only accessible to authorized users.")
+    # Your main app content goes here
+    st.write("This is a secure page. Only authorized users can see this.")
     
-    # Add logout button
-    if st.button("Logout"):
-        authenticator.logout("main")
-        st.experimental_rerun()
+    # Add a logout button
+    authenticator.logout("Logout", "main")
 
-elif auth_status is False:
-    st.error("Username/password incorrect")
-else:
-    st.warning("Please enter your credentials")
+elif authentication_status == False:
+    st.error("Username/password is incorrect")
+elif authentication_status == None:
+    st.warning("Please enter your username and password")
