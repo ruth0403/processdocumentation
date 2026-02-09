@@ -1,0 +1,14 @@
+users:
+  # Admin user - can see all logs
+  admin:
+    password: admin123
+    role: admin
+
+  # Regular users
+  user1:
+    password: user123
+    role: user
+
+  user2:
+    password: test123
+    role: user
