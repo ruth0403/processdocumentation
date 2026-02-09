@@ -1,133 +1,102 @@
 import streamlit as st
-import hashlib
-import csv
-import os
-from datetime import datetime
+import yaml
 import pandas as pd
+from datetime import datetime
+import os
 
-# ---------------- CONFIG ----------------
-LOG_FILE = "usage_log.csv"
-REGIONS = ["MEA", "KSA", "EU", "SEA"]
+# -------------------------
+# Config
+# -------------------------
+st.set_page_config(page_title="Secure App", layout="centered")
 
-# ---------------- CREATE LOG FILE IF NOT EXISTS ----------------
+LOG_FILE = "login_logs.csv"
+
+# -------------------------
+# Load users
+# -------------------------
+with open("users.yaml") as f:
+    users = yaml.safe_load(f)["users"]
+
+# -------------------------
+# Initialize log file
+# -------------------------
 if not os.path.exists(LOG_FILE):
-    with open(LOG_FILE, mode="w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["timestamp","username","name","position","region","action"])
+    pd.DataFrame(columns=[
+        "timestamp", "name", "position", "region", "username"
+    ]).to_csv(LOG_FILE, index=False)
 
-# ---------------- USER DATABASE ----------------
-USER_DB = {
-    "alice": {
-        "password": hashlib.sha256("alice123".encode()).hexdigest(),
-        "position": "HR Manager",
-        "region": "MEA"
-    },
-    "bob": {
-        "password": hashlib.sha256("bob123".encode()).hexdigest(),
-        "position": "Finance Analyst",
-        "region": "EU"
-    }
-}
+# -------------------------
+# Session state
+# -------------------------
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 
-# ---------------- LOG FUNCTION ----------------
-def log_event(username, action, name="", position="", region=""):
-    with open(LOG_FILE, mode="a", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            datetime.utcnow().isoformat(),
-            username,
-            name,
-            position,
-            region,
-            action
-        ])
+if "user_role" not in st.session_state:
+    st.session_state.user_role = None
 
-# ---------------- LOGIN FUNCTION ----------------
-def login(username, password):
-    hashed_pw = hashlib.sha256(password.encode()).hexdigest()
-    if username in USER_DB and USER_DB[username]["password"] == hashed_pw:
-        return True
-    return False
+# -------------------------
+# Login Function
+# -------------------------
+def login():
+    st.title("🔐 Authorized Login")
 
-# ---------------- INITIALIZE SESSION STATE ----------------
-for key in ["logged_in","username","name","position","region"]:
-    if key not in st.session_state:
-        st.session_state[key] = "" if key != "logged_in" else False
-
-# ---------------- STREAMLIT APP ----------------
-st.title("Internal Authorization System")
-
-# ---------------- LOGIN SCREEN ----------------
-if not st.session_state.logged_in:
-    st.subheader("User Authorization")
-
-    # User inputs
     name = st.text_input("Name")
     position = st.text_input("Position")
-    region = st.selectbox("Region", REGIONS)
+    region = st.selectbox("Region", ["MEA", "KSA", "EU", "SEA"])
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
-    login_button = st.button("Login")
-
-    if login_button:
-        if not name or not position or not region or not username or not password:
+    if st.button("Login"):
+        if not all([name, position, region, username, password]):
             st.error("All fields are mandatory.")
-        elif login(username, password):
-            st.session_state.logged_in = True
+            return
+
+        if username in users and users[username]["password"] == password:
+            # Authenticate
+            st.session_state.authenticated = True
+            st.session_state.user_role = users[username]["role"]
             st.session_state.username = username
-            st.session_state.name = name
-            st.session_state.position = position
-            st.session_state.region = region
 
-            log_event(username, "LOGIN", name, position, region)
-            st.success(f"Welcome {name} from {region}!")
-            st.stop()  # Stop script here so dashboard shows correctly
+            # Log login
+            log_entry = pd.DataFrame([{
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "name": name,
+                "position": position,
+                "region": region,
+                "username": username
+            }])
+
+            log_entry.to_csv(LOG_FILE, mode="a", header=False, index=False)
+
+            st.success("Login successful!")
+            st.rerun()
         else:
-            st.error("Invalid username or password.")
+            st.error("Invalid username or password")
 
-# ---------------- DASHBOARD ----------------
-else:
-    st.subheader("Dashboard")
-    st.write(
-        f"Hello {st.session_state.name} ({st.session_state.position}) "
-        f"from {st.session_state.region}!"
-    )
+# -------------------------
+# Main App
+# -------------------------
+def main_app():
+    st.title("🏠 Main Application")
 
-    # Example action
-    if st.button("Perform Sample Action"):
-        log_event(
-            st.session_state.username,
-            "PERFORMED_SAMPLE_ACTION",
-            st.session_state.name,
-            st.session_state.position,
-            st.session_state.region
-        )
-        st.success("Sample action logged!")
+    st.write(f"Welcome **{st.session_state.username}** 👋")
 
-    # ---------------- LOG VIEWER ----------------
-    st.subheader("Usage Log")
-    if os.path.exists(LOG_FILE):
-        log_df = pd.read_csv(LOG_FILE)
-        st.dataframe(log_df)
-        # Download button
-        st.download_button(
-            label="Download Log CSV",
-            data=open(LOG_FILE,"rb"),
-            file_name="usage_log.csv",
-            mime="text/csv"
-        )
-    else:
-        st.info("No logs available yet.")
+    st.info("You are now inside the secured app.")
 
-    # ---------------- LOGOUT ----------------
+    # Admin-only logs
+    if st.session_state.user_role == "admin":
+        st.subheader("📊 Login Activity (Admin Only)")
+        logs = pd.read_csv(LOG_FILE)
+        st.dataframe(logs, use_container_width=True)
+
     if st.button("Logout"):
-        log_event(
-            st.session_state.username,
-            "LOGOUT",
-            st.session_state.name,
-            st.session_state.position,
-            st.session_state.region
-        )
-        st.session_state.logged_in = False
-        st.stop()
+        st.session_state.clear()
+        st.rerun()
+
+# -------------------------
+# App Flow
+# -------------------------
+if not st.session_state.authenticated:
+    login()
+else:
+    main_app()
