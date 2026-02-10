@@ -13,7 +13,8 @@ st.markdown("""
 **Instructions:**  
 1. Copy your Excel table (with headers: Steps, Process Steps, Owner, Document/Template) and paste it below.  
 2. Enter the process rules in the separate text area.  
-3. AI will generate improvement questions for each step considering the rules.
+3.Improvement questions will be generated.
+4. Ensure your process submission has answers to all the improvement questions incorporated in it.
 """)
 
 # --- Step 1: Paste table ---
