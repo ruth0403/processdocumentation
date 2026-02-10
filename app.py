@@ -1,56 +1,60 @@
 import streamlit as st
 import pandas as pd
+from io import StringIO
 from openai import OpenAI
 
 st.set_page_config(page_title="Process Review AI", layout="wide")
-st.title("Process Review AI - Generate Questions for Process Owners")
+st.title("Process Review AI - Table + Rules Analysis")
 
 # Initialize OpenAI client
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# Upload Excel
-uploaded_file = st.file_uploader("Upload your process Excel file", type=["xlsx", "xls"])
+st.markdown("""
+**Instructions:**  
+1. Copy your Excel table (with headers: Steps, Process Steps, Owner, Document/Template) and paste it below.  
+2. Enter the process rules in the separate text area.  
+3. AI will generate improvement questions for each step considering the rules.
+""")
 
-if uploaded_file:
-    # Read Excel without headers first
-    df_raw = pd.read_excel(uploaded_file, header=None)
+# --- Step 1: Paste table ---
+table_input = st.text_area("Paste your process table here (with headers)", height=300)
 
-    # Extract relevant columns: starts from row 8 (index 7), column 3 (index 2)
-    df_section = df_raw.iloc[7:, 2:6]  # Columns C-F
-    df_section.columns = ["Steps", "Process Steps", "Owner", "Document/Template"]
+# --- Step 2: Enter rules separately ---
+rules_input = st.text_area("Enter process rules here (each rule on a new line)", height=150)
+
+if table_input:
+    # Try reading table as tab-separated, fallback to comma
+    try:
+        df = pd.read_csv(StringIO(table_input), sep="\t")
+    except:
+        df = pd.read_csv(StringIO(table_input))
+
+    # Clean headers
+    df.columns = df.columns.str.strip()
 
     # Drop fully empty rows
-    df_section = df_section.dropna(how="all").reset_index(drop=True)
-
-    # Find the row where "Rules" appears in Process Steps
-    rules_index = df_section[df_section["Process Steps"].astype(str).str.strip().str.lower() == "rules"].index
-
-    if len(rules_index) > 0:
-        rules_index = rules_index[0]
-        # Split table and rules
-        df_table = df_section.iloc[:rules_index].copy()
-        df_rules = df_section.iloc[rules_index + 1 :].copy()  # everything after "Rules"
-        rules_text = "; ".join(df_rules["Process Steps"].dropna().astype(str).tolist())
-    else:
-        df_table = df_section.copy()
-        rules_text = ""
+    df = df.dropna(how="all").reset_index(drop=True)
 
     # Ensure Steps column is integer
-    df_table["Steps"] = df_table["Steps"].astype(int, errors="ignore")
+    if "Steps" in df.columns:
+        df["Steps"] = df["Steps"].astype(int, errors="ignore")
 
-    st.subheader("Detected Process Table")
-    st.dataframe(df_table)
+    st.subheader("Process Table Preview")
+    st.dataframe(df)
+
+    # Prepare rules for AI
+    rules_text = rules_input.strip().replace("\n", "; ")
 
     if rules_text:
-        st.subheader("Detected Rules (considered for AI questions)")
+        st.subheader("Process Rules")
         st.write(rules_text)
 
-    # Generate AI questions
+    # --- Step 3: Generate AI questions ---
     if st.button("Generate Improvement Questions"):
         st.info("Generating questions... This may take a few seconds...")
         questions_list = []
 
-        for _, row in df_table.iterrows():
+        for _, row in df.iterrows():
             step = row.get("Steps", "")
             process_step = row.get("Process Steps", "")
             owner = row.get("Owner", "")
@@ -80,7 +84,7 @@ Document/Template: {document}
             questions_list.append((step, process_step, questions))
 
         # Display questions
-        st.subheader("Generated Questions")
+        st.subheader("Generated Improvement Questions")
         for step, process_step, questions in questions_list:
             st.markdown(f"**Step {step}: {process_step}**")
             st.markdown(questions)
