@@ -1,102 +1,42 @@
 import streamlit as st
-import yaml
 import pandas as pd
-from datetime import datetime
-import os
 
-# -------------------------
-# Config
-# -------------------------
-st.set_page_config(page_title="Secure App", layout="centered")
+st.title("Process Documentation Submission")
 
-LOG_FILE = "login_logs.csv"
+# Process metadata
+process_name = st.text_input("Process Name:")
+process_owner = st.text_input("Process Owner:")
 
-# -------------------------
-# Load users
-# -------------------------
-with open("users.yaml") as f:
-    users = yaml.safe_load(f)["users"]
+# Create an empty dataframe for steps
+steps_df = pd.DataFrame({
+    "Steps": [f"Step {i}" for i in range(1, 11)],
+    "Process Steps": [""]*10,
+    "Owner": [""]*10,
+    "Document/Template": [""]*10
+})
 
-# -------------------------
-# Initialize log file
-# -------------------------
-if not os.path.exists(LOG_FILE):
-    pd.DataFrame(columns=[
-        "timestamp", "name", "position", "region", "username"
-    ]).to_csv(LOG_FILE, index=False)
+# Editable table for steps
+st.write("### Process Steps")
+edited_steps = st.experimental_data_editor(steps_df, num_rows="dynamic")
 
-# -------------------------
-# Session state
-# -------------------------
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+# Rules
+st.write("### Rules")
+rules = []
+for i in range(1, 6):
+    rule = st.text_input(f"Rule {i}", key=f"rule_{i}")
+    rules.append(rule)
 
-if "user_role" not in st.session_state:
-    st.session_state.user_role = None
+# Button to export to Excel
+if st.button("Export to Excel"):
+    # Combine steps and rules into a single Excel
+    with pd.ExcelWriter("Process_Documentation.xlsx", engine='xlsxwriter') as writer:
+        # Steps sheet
+        edited_steps.to_excel(writer, index=False, sheet_name="Steps")
+        # Rules sheet
+        rules_df = pd.DataFrame({"Rules": rules})
+        rules_df.to_excel(writer, index=False, sheet_name="Rules")
+    st.success("Excel file saved as 'Process_Documentation.xlsx'")
 
-# -------------------------
-# Login Function
-# -------------------------
-def login():
-    st.title("🔐 Authorized Login")
-
-    name = st.text_input("Name")
-    position = st.text_input("Position")
-    region = st.selectbox("Region", ["MEA", "KSA", "EU", "SEA"])
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-
-    if st.button("Login"):
-        if not all([name, position, region, username, password]):
-            st.error("All fields are mandatory.")
-            return
-
-        if username in users and users[username]["password"] == password:
-            # Authenticate
-            st.session_state.authenticated = True
-            st.session_state.user_role = users[username]["role"]
-            st.session_state.username = username
-
-            # Log login
-            log_entry = pd.DataFrame([{
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "name": name,
-                "position": position,
-                "region": region,
-                "username": username
-            }])
-
-            log_entry.to_csv(LOG_FILE, mode="a", header=False, index=False)
-
-            st.success("Login successful!")
-            st.rerun()
-        else:
-            st.error("Invalid username or password")
-
-# -------------------------
-# Main App
-# -------------------------
-def main_app():
-    st.title("🏠 Main Application")
-
-    st.write(f"Welcome **{st.session_state.username}** 👋")
-
-    st.info("You are now inside the secured app.")
-
-    # Admin-only logs
-    if st.session_state.user_role == "admin":
-        st.subheader("📊 Login Activity (Admin Only)")
-        logs = pd.read_csv(LOG_FILE)
-        st.dataframe(logs, use_container_width=True)
-
-    if st.button("Logout"):
-        st.session_state.clear()
-        st.rerun()
-
-# -------------------------
-# App Flow
-# -------------------------
-if not st.session_state.authenticated:
-    login()
-else:
-    main_app()
+st.write("### Preview Table")
+st.table(edited_steps)
+st.write("Rules:", rules)
